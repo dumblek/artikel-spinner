@@ -26,4 +26,7 @@ def vote(request, question_id):
 
 def contact(request):
 	form = ExampleForm()
-	return render(request, "main/contact.html", {'form':form})
+	return render(request, "polls/contact.html", {'form':form})
+
+def cobo(request):
+	return HttpResponse("nyobo")
