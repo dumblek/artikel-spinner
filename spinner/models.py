@@ -1,34 +1,40 @@
 from django.db import models
+from django.db.models import Q
 import random, html
 import re, pandas as pd
 import pandasql as ps
 
 
-class Spinner(models.Model):
+class Words(models.Model):
 
     words = models.TextField()
-    stop_words = models.CharField(max_length=50)
+
+    def __str__(self):
+        return self.words
 
     def spinWord(self, artikel):
         text = str(artikel)
 
         list_txt = [x.replace('\n', '').replace('.', '').replace(',', '') for x in text.split(" ")]
-        # list_txt = list(filter(lambda w: w not in stopwords, list_txt))
-        random_list_txt = random.sample(list_txt, round(len(list_txt)/2))
-
-        with open('/home/duha/Projects/mysite/static/synonim/tesaurus-id.txt', 'r') as f:
-            lines = f.readlines()
+        stopwords = list(StopWords.objects.all().values('stop_words'))
+        list_stopwords = []
+        for w in stopwords:
+            list_stopwords.append(w["stop_words"])
         
-        lines_clear = [[re.sub(r'\d\,\s',',', y) for y in re.sub(r'^\-.*|^\d|(\;|)\n$|\d+\s+|\d+', '', re.sub(r'(\s|^)(n|v|p|a|pron|adv)\s', ', ', x.replace('- ',''))).split('; ') if y] for x in lines]
-        df_sin = pd.DataFrame(lines_clear)
-        df_sin = df_sin.rename(columns={0:'word'})[['word']]
+        list_txt = [x for x in list_txt if x not in list_stopwords]
+        
+        random_list_txt = random.sample(list_txt, round(len(list_txt)/2))
 
         for w in random_list_txt:
             try:
-                syn = ps.sqldf(f"select word from df_sin where word like '{w},%' or word like '%,{w}' or word like '%, {w}' or word like '%,{w},%' or word like '%, {w},%'")
-                sample = syn.sample(1)['word']
-                selected = random.choice(sample[sample.index[0]].split(", "))
-                text = text.replace(w, selected)
+                filter = Q(words__istartswith=w+',') | Q(words__iendswith=','+w) | Q(words__iendswith=', '+w) | Q(words__icontains=','+w+',') | Q(words__icontains=', '+w+',') 
+                syn = list(Words.objects.filter(filter))
+                if syn:
+                    df_sin = pd.DataFrame(syn)
+                    df_sin = df_sin.rename(columns={0:'word'})[['word']]
+                    sample = df_sin.sample(1)['word']
+                    selected = random.choice(str(sample[sample.index[0]]).split(", "))
+                    text = text.replace(w, selected)
             except Exception as e:
                 print(str(e))
 
@@ -108,3 +114,10 @@ class Spinner(models.Model):
                 text = text.replace(list_replace[i],random.choice(html_entity[i]))
                 text = html.unescape(text)
         return text
+
+class StopWords(models.Model):
+
+    stop_words = models.CharField(max_length=50)
+
+    def __str__(self):
+        return self.stop_words
